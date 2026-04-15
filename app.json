@@ -1,11 +1,11 @@
 {
   "expo": {
-    "name": "calorie-tracker-ai",
-    "slug": "calorie-tracker-ai",
+    "name": "Deglem",
+    "slug": "deglem",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "calorietrackerai",
+    "scheme": "deglem",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
@@ -38,7 +38,16 @@
             "backgroundColor": "#000000"
           }
         }
-      ]
+      ],
+      "expo-secure-store",
+      "expo-localization",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Allow $(PRODUCT_NAME) to access your photos to analyze food."
+        }
+      ],
+      "expo-sqlite"
     ],
     "experiments": {
       "typedRoutes": true,

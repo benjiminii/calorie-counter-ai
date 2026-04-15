@@ -1,0 +1,164 @@
+# Deglem — Claude Code Guide
+
+## Project Overview
+
+A React Native / Expo app for calorie tracking via food photography. A multimodal LLM (Claude or Gemini) identifies the food, estimates calories + macros, and returns structured data. Users can add natural-language context, edit the result, and re-analyze. Meals persist locally in SQLite via Drizzle.
+
+**App name:** Deglem (formerly "Calorie Tracker AI" / "Ilchleg").
+
+## Tech Stack
+
+| Layer | Choice |
+|-------|--------|
+| Framework | Expo SDK 54, React Native 0.81, New Architecture enabled |
+| Routing | Expo Router v6 (file-based, typed routes) |
+| Styling | NativeWind v4 (Tailwind classes on RN components) |
+| AI — Claude | `@anthropic-ai/sdk` with **tool_use** for structured output |
+| AI — Gemini | `@google/genai` with **responseSchema** for structured output |
+| DB | Drizzle ORM + `expo-sqlite` (`useLiveQuery` for reactivity) |
+| State | Zustand (`profile-store`, `model-store`, legacy `meal-store`) |
+| i18n | `i18next` + `react-i18next` — English + Mongolian |
+| Fonts | DM Sans via `@expo-google-fonts/dm-sans` |
+| Camera | `expo-camera` + `expo-image-picker` + `expo-image-manipulator` |
+| Storage | `expo-secure-store` for persisted profile |
+| Haptics | `expo-haptics` |
+
+## Design System
+
+See `DESIGN.md` for the full system. Key rules:
+
+- **Background**: always `bg-cream` (`#f7f4ed`) — never `bg-white`
+- **Text**: `text-charcoal` (`#1c1c1c`) primary, `text-muted` (`#5f5f5d`) secondary
+- **Cards**: `border border-cream-border rounded-xl` — borders not shadows
+- **Buttons**: `active:opacity-80` on every `Pressable`
+- **Camera button** (tab bar): `rounded-full bg-charcoal` 80×80, raised; always stays **last** in the tab order
+- **Fonts**: inline `style={{ fontFamily: 'DMSans_400Regular' }}` for body / `'DMSans_600SemiBold'` for headings
+- **Touch targets**: minimum 44×44pt
+
+## App Structure
+
+```
+app/
+  (tabs)/
+    _layout.tsx        ← Tabs: Home · Progress · Profile · Camera (custom raised button, last)
+    index.tsx          ← Dashboard: week calendar + macro summary + meal list + model picker pill
+    progress.tsx       ← Calorie + weight line charts (gifted-charts), 14-day history
+    profile.tsx        ← BMR form + language toggle (MN / EN) in top-right
+    camera.tsx         ← Navigates to /log/camera (the tab is just an entry point)
+  log/
+    camera.tsx         ← Full-screen capture, optional context input, picker fallback
+    [id].tsx           ← Meal detail: view edited values, re-analyze, delete
+  _layout.tsx          ← Fonts + Drizzle migrations + i18n + global.css + splash hide
+components/            ← MealCard, CalorieRing, MacroSummary, WeekCalendar, ModelPickerModal…
+lib/
+  analyze.ts           ← Orchestrates: image prep → provider dispatch → DB write
+  i18n.ts              ← i18next init (device-locale aware, mn fallback)
+  providers/
+    types.ts           ← AnalyzeFoodFn, AnalysisResult, normalize(), languageInstruction()
+    claude.ts          ← Claude with tool_use (structured)
+    gemini.ts          ← Gemini with responseSchema + thinkingBudget: 0
+    models.ts          ← MODELS registry + pricing ($/1M input/output tokens)
+db/
+  schema.ts            ← `meals` table (with `model` column)
+  queries.ts           ← insertMeal, updateMealAnalysis, setMealStatus, deleteMeal…
+  migrations/          ← Drizzle SQL migrations + `migrations.js` barrel
+  index.ts             ← opens `deglem.db`
+store/
+  model-store.ts       ← selected model id (in-memory)
+  profile-store.ts     ← persisted profile via SecureStore + BMR calc
+  meal-store.ts        ← legacy, mostly unused now that meals live in SQLite
+locales/
+  en.json, mn.json     ← must stay in sync (same keys)
+```
+
+## Core User Flow
+
+1. User taps the camera tab (bottom-right) on any screen
+2. `app/log/camera.tsx` — capture photo + optional quick context, or pick from library
+3. `insertMeal()` creates a row with `status: 'analyzing'`, user returns to dashboard (fire-and-forget)
+4. `lib/analyze.ts` resizes/re-encodes to JPEG (max 1024px), dispatches to the selected provider, writes result + `model` id to the row
+5. Dashboard reactively updates via `useLiveQuery`; shimmer → populated card
+6. Tap a card → `app/log/[id].tsx` — edit, re-analyze, or delete
+
+## Provider Layer
+
+Both providers conform to `AnalyzeFoodFn`:
+
+```ts
+(jpegBase64: string, context: string, modelId?: string, language?: string) => Promise<AnalysisResult>
+```
+
+Dispatch is runtime, driven by `useModelStore.getState().modelId` + `findModel()` → `model.provider`. All UI-visible fields (`name`, `ingredients`, `description`) come back in the active UI language via `languageInstruction()` appended to the user prompt.
+
+### Claude (`lib/providers/claude.ts`)
+- Uses `tool_use` with `tool_choice: { type: 'tool', name: 'log_meal' }` — guaranteed structured output
+- Default model: `claude-haiku-4-5-20251001`
+- `max_tokens: 400`
+- Logs `response.usage` per call
+
+### Gemini (`lib/providers/gemini.ts`)
+- Uses `responseMimeType: 'application/json'` + `responseSchema` with `propertyOrdering`
+- Default model: `gemini-2.5-flash`
+- `maxOutputTokens: 400`
+- `thinkingConfig: { thinkingBudget: 0 }` — disables reasoning tokens (critical for cost on 2.5 Flash)
+- Logs `response.usageMetadata` per call
+
+### Models & Pricing
+`lib/providers/models.ts` holds the full registry with USD per-1M token costs. Tap the pill next to "Recent Meals" to open `ModelPickerModal` and switch providers at runtime.
+
+## Database
+
+- Single `meals` table; schema in `db/schema.ts`, migrations auto-generated by `drizzle-kit generate`
+- Migrations run automatically on app launch via `useMigrations()` in `app/_layout.tsx`
+- Reactive reads via `useLiveQuery` (requires `enableChangeListener: true` on the DB handle — set in `db/index.ts`)
+- SQL files inlined into JS via `babel-plugin-inline-import` (see `babel.config.js`)
+
+## i18n
+
+- `lib/i18n.ts` picks device locale at startup, falls back to `mn`
+- Toggle language on Profile screen (top-right `MN / EN` pill) — not persisted across app launches (yet)
+- Both `locales/en.json` and `locales/mn.json` must have identical keys — verify with:
+  ```bash
+  diff <(jq -r 'keys[]' locales/en.json | sort) <(jq -r 'keys[]' locales/mn.json | sort)
+  ```
+- AI output language is passed to the provider per request; localizes `name`, `ingredients`, `description` (numeric fields stay numeric)
+
+## NativeWind Setup
+
+- `tailwind.config.js` — custom colors (`cream`, `charcoal`, `cream-border`, `muted`, `off-white`) + DM Sans font families
+- `metro.config.js` — `withNativeWind` wrapper pointing to `global.css`
+- `global.css` — Tailwind directives, imported at top of `app/_layout.tsx`
+- `nativewind-env.d.ts` — type declarations
+
+## Environment
+
+```
+EXPO_PUBLIC_ANTHROPIC_API_KEY=sk-ant-...
+EXPO_PUBLIC_GEMINI_API_KEY=...
+```
+
+Stored in `.env.local` (gitignored). `EXPO_PUBLIC_` prefix means **these are bundled into the JS** — anyone with the app bundle can read them. Rotate before sharing builds.
+
+## Commands
+
+```bash
+npm start               # Metro bundler
+npm run ios             # Run on iOS simulator
+npm run android         # Run on Android emulator
+npm run lint            # ESLint
+npx expo start --clear  # Clear Metro cache (needed after babel plugin changes)
+npx expo start --tunnel # Remote device via ngrok (requires @expo/ngrok)
+npx drizzle-kit generate # Generate a new migration after schema changes
+```
+
+## Key Conventions
+
+- All styling via NativeWind `className` — no `StyleSheet.create` except for camera overlay
+- Use `Pressable` (not `TouchableOpacity`) with `active:opacity-80`
+- Inline `style={{ fontFamily: ... }}` for DM Sans — don't rely on Tailwind font utilities
+- Haptics on: meal logged (Success), camera capture (Medium), meal deleted (Warning), language switch (selection)
+- `SafeAreaView` (from `react-native-safe-area-context`) on all screens
+- File names: kebab-case (`meal-card.tsx`, `model-picker-modal.tsx`)
+- Component names: PascalCase
+- i18n: **every** user-facing string must go through `t()` — both `locales/*.json` files updated together
+- Camera tab is **always last** in the tab order — do not reorder it

@@ -1,98 +1,99 @@
-import { Image } from 'expo-image';
-import { Platform, StyleSheet } from 'react-native';
+import { useRouter } from 'expo-router';
+import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import { Pressable, ScrollView, Text, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 
-import { HelloWave } from '@/components/hello-wave';
-import ParallaxScrollView from '@/components/parallax-scroll-view';
-import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
-import { Link } from 'expo-router';
+import { MacroSummary } from '@/components/macro-summary';
+import { MealCard } from '@/components/meal-card';
+import { ModelPickerModal } from '@/components/model-picker-modal';
+import { WeekCalendar } from '@/components/week-calendar';
+import { deleteMeal, getMealsByDate, todayString } from '@/db/queries';
+import { useMeals } from '@/hooks/use-meals';
+import { findModel } from '@/lib/providers/models';
+import { useModelStore } from '@/store/model-store';
 
 export default function HomeScreen() {
-  return (
-    <ParallaxScrollView
-      headerBackgroundColor={{ light: '#A1CEDC', dark: '#1D3D47' }}
-      headerImage={
-        <Image
-          source={require('@/assets/images/partial-react-logo.png')}
-          style={styles.reactLogo}
-        />
-      }>
-      <ThemedView style={styles.titleContainer}>
-        <ThemedText type="title">Welcome!</ThemedText>
-        <HelloWave />
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 1: Try it</ThemedText>
-        <ThemedText>
-          Edit <ThemedText type="defaultSemiBold">app/(tabs)/index.tsx</ThemedText> to see changes.
-          Press{' '}
-          <ThemedText type="defaultSemiBold">
-            {Platform.select({
-              ios: 'cmd + d',
-              android: 'cmd + m',
-              web: 'F12',
-            })}
-          </ThemedText>{' '}
-          to open developer tools.
-        </ThemedText>
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <Link href="/modal">
-          <Link.Trigger>
-            <ThemedText type="subtitle">Step 2: Explore</ThemedText>
-          </Link.Trigger>
-          <Link.Preview />
-          <Link.Menu>
-            <Link.MenuAction title="Action" icon="cube" onPress={() => alert('Action pressed')} />
-            <Link.MenuAction
-              title="Share"
-              icon="square.and.arrow.up"
-              onPress={() => alert('Share pressed')}
-            />
-            <Link.Menu title="More" icon="ellipsis">
-              <Link.MenuAction
-                title="Delete"
-                icon="trash"
-                destructive
-                onPress={() => alert('Delete pressed')}
-              />
-            </Link.Menu>
-          </Link.Menu>
-        </Link>
+  const { t } = useTranslation();
+  const router = useRouter();
+  const [selectedDate, setSelectedDate] = useState(todayString());
+  const [modelPickerOpen, setModelPickerOpen] = useState(false);
+  const meals = useMeals();
+  const dayMeals = getMealsByDate(meals, selectedDate);
+  const modelId = useModelStore((s) => s.modelId);
+  const currentModel = findModel(modelId);
 
-        <ThemedText>
-          {`Tap the Explore tab to learn more about what's included in this starter app.`}
-        </ThemedText>
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 3: Get a fresh start</ThemedText>
-        <ThemedText>
-          {`When you're ready, run `}
-          <ThemedText type="defaultSemiBold">npm run reset-project</ThemedText> to get a fresh{' '}
-          <ThemedText type="defaultSemiBold">app</ThemedText> directory. This will move the current{' '}
-          <ThemedText type="defaultSemiBold">app</ThemedText> to{' '}
-          <ThemedText type="defaultSemiBold">app-example</ThemedText>.
-        </ThemedText>
-      </ThemedView>
-    </ParallaxScrollView>
+  return (
+    <SafeAreaView className="flex-1 bg-cream" edges={['top']}>
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={{ paddingBottom: 100 }}
+      >
+        <View className="flex-row justify-between items-center px-5 pt-4 pb-2">
+          <Text
+            style={{ fontFamily: 'DMSans_600SemiBold' }}
+            className="text-3xl text-charcoal tracking-tight"
+          >
+            {t('app_name')}
+          </Text>
+        </View>
+
+        <WeekCalendar selectedDate={selectedDate} onDayPress={setSelectedDate} meals={meals} />
+        <MacroSummary selectedDate={selectedDate} meals={meals} />
+
+        <View className="px-5 pt-2">
+          <View className="flex-row justify-between items-center mb-3">
+            <Text
+              style={{ fontFamily: 'DMSans_600SemiBold' }}
+              className="text-xl text-charcoal"
+            >
+              {t('recent_meals')}
+            </Text>
+            <Pressable
+              onPress={() => setModelPickerOpen(true)}
+              className="flex-row items-center gap-1.5 border border-cream-border rounded-full px-3 py-1.5 active:opacity-80"
+            >
+              <MaterialIcons name="tune" size={14} color="#1c1c1c" />
+              <Text
+                style={{ fontFamily: 'DMSans_600SemiBold' }}
+                className="text-xs text-charcoal"
+              >
+                {currentModel.label}
+              </Text>
+            </Pressable>
+          </View>
+
+          {dayMeals.length === 0 ? (
+            <View className="py-10 items-center">
+              <Text style={{ fontSize: 40 }}>🍽️</Text>
+              <Text
+                style={{ fontFamily: 'DMSans_400Regular' }}
+                className="text-muted text-base mt-3 text-center"
+              >
+                {t('no_meals')}
+              </Text>
+            </View>
+          ) : (
+            dayMeals.map((meal) => (
+              <MealCard
+                key={meal.id}
+                meal={meal}
+                onDelete={() => deleteMeal(meal.id)}
+              />
+            ))
+          )}
+        </View>
+      </ScrollView>
+
+      <ModelPickerModal visible={modelPickerOpen} onClose={() => setModelPickerOpen(false)} />
+
+      {/* <Pressable
+        onPress={() => router.push('/log/camera')}
+        className="absolute bottom-6 right-5 bg-charcoal rounded-full w-20 h-20 items-center justify-center active:opacity-80 ios:shadow-md ios:shadow-black/30 android:elevation-4"
+      >
+        <MaterialIcons name="camera-alt" size={32} color="#fcfbf8" />
+      </Pressable> */}
+    </SafeAreaView>
   );
 }
-
-const styles = StyleSheet.create({
-  titleContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  stepContainer: {
-    gap: 8,
-    marginBottom: 8,
-  },
-  reactLogo: {
-    height: 178,
-    width: 290,
-    bottom: 0,
-    left: 0,
-    position: 'absolute',
-  },
-});
