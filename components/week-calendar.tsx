@@ -1,4 +1,3 @@
-import React from 'react';
 import { View, Text, Pressable, ScrollView } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { MealRow } from '@/db/schema';
@@ -44,46 +43,53 @@ export function WeekCalendar({ selectedDate, onDayPress, meals }: WeekCalendarPr
   });
 
   return (
-    <View className="px-5 py-2">
+    <View className="px-5 pt-2 pb-1">
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
-        contentContainerStyle={{ gap: 4 }}
+        contentContainerStyle={{ gap: 8 }}
       >
-        {days.map((day) => (
-          <Pressable
-            key={day.date}
-            onPress={() => onDayPress(day.date)}
-            className="items-center py-1"
-            style={{ width: 40 }}
-          >
-            <Text
-              style={{ fontFamily: 'DMSans_400Regular' }}
-              className={`text-xs mb-1 ${day.isSelected ? 'text-off-white' : 'text-muted'}`}
-            >
-              {day.label}
-            </Text>
-            <View
-              className={`w-10 h-10 rounded-full items-center justify-center ${
-                day.isSelected ? 'bg-charcoal' : day.isToday ? 'bg-cream-border' : 'bg-transparent'
+        {days.map((day) => {
+          const selected = day.isSelected;
+          return (
+            <Pressable
+              key={day.date}
+              onPress={() => onDayPress(day.date)}
+              className={`items-center py-3 rounded-2xl border active:opacity-80 ${
+                selected
+                  ? 'bg-charcoal border-charcoal'
+                  : day.isToday
+                  ? 'bg-cream border-charcoal/30'
+                  : 'bg-cream border-cream-border'
               }`}
+              style={{ width: 52 }}
             >
               <Text
-                style={{
-                  fontFamily: day.isToday || day.isSelected ? 'DMSans_600SemiBold' : 'DMSans_400Regular',
-                }}
-                className={`text-sm ${day.isSelected ? 'text-off-white' : 'text-charcoal'}`}
+                style={{ fontFamily: 'DMSans_600SemiBold' }}
+                className={`text-[10px] uppercase tracking-widest ${
+                  selected ? 'text-off-white' : 'text-muted'
+                }`}
+              >
+                {day.label}
+              </Text>
+              <Text
+                style={{ fontFamily: 'DMSans_600SemiBold' }}
+                className={`text-sm mt-1 ${selected ? 'text-off-white' : 'text-charcoal'}`}
               >
                 {day.num}
               </Text>
-            </View>
-            <View className="w-1 h-1 mt-1">
-              {day.hasLog && !day.isSelected && (
-                <View className="w-1 h-1 rounded-full bg-charcoal/40" />
-              )}
-            </View>
-          </Pressable>
-        ))}
+              <View
+                className={`w-1 h-1 rounded-full mt-1 ${
+                  day.hasLog
+                    ? selected
+                      ? 'bg-off-white'
+                      : 'bg-charcoal'
+                    : 'bg-transparent'
+                }`}
+              />
+            </Pressable>
+          );
+        })}
       </ScrollView>
     </View>
   );

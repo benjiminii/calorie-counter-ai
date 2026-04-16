@@ -37,12 +37,12 @@ yarn-error.*
 *.tsbuildinfo
 
 app-example
-
+*.*
 # generated native folders
 /ios
 /android
 
 .claude
 graphify-out
-.vscode
 node_modules
+design/

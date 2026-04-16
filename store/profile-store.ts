@@ -18,13 +18,18 @@ export interface WeightEntry {
 
 export interface Profile {
   name: string;
+  age: number;
   gender: Gender;
   weight: number; // kg
   height: number; // cm
+  goalWeight: number; // kg
+  goalDurationMonths: number;
   activityLevel: ActivityLevel;
   calorieGoal: number; // kcal/day
   useAutoGoal: boolean;
   weightLog: WeightEntry[];
+  language: 'mn' | 'en';
+  onboardedAt?: string; // ISO date string (YYYY-MM-DD)
 }
 
 const ACTIVITY_MULTIPLIERS: Record<ActivityLevel, number> = {
@@ -35,18 +40,60 @@ const ACTIVITY_MULTIPLIERS: Record<ActivityLevel, number> = {
   extra_active: 1.9,
 };
 
+export function calculateBMR(
+  gender: Gender,
+  weight: number,
+  height: number,
+  age: number
+): number {
+  return gender === 'male'
+    ? 10 * weight + 6.25 * height - 5 * age + 5
+    : 10 * weight + 6.25 * height - 5 * age - 161;
+}
+
+export function calculateMaintenance(
+  gender: Gender,
+  weight: number,
+  height: number,
+  age: number,
+  activityLevel: ActivityLevel
+): number {
+  return Math.round(calculateBMR(gender, weight, height, age) * ACTIVITY_MULTIPLIERS[activityLevel]);
+}
+
 export function calculateCalorieGoal(
   gender: Gender,
   weight: number,
   height: number,
-  activityLevel: ActivityLevel
+  activityLevel: ActivityLevel,
+  age: number = 30
 ): number {
-  // Mifflin-St Jeor BMR
-  const bmr =
-    gender === 'male'
-      ? 10 * weight + 6.25 * height - 5 * 30 + 5
-      : 10 * weight + 6.25 * height - 5 * 30 - 161;
-  return Math.round(bmr * ACTIVITY_MULTIPLIERS[activityLevel]);
+  return calculateMaintenance(gender, weight, height, age, activityLevel);
+}
+
+export function healthyWeightRange(heightCm: number): { low: number; high: number } {
+  const m = heightCm / 100;
+  return {
+    low: Math.round(18.5 * m * m * 10) / 10,
+    high: Math.round(24.9 * m * m * 10) / 10,
+  };
+}
+
+// Given current weight, goal weight, duration in months, and maintenance calories:
+// returns the daily calorie target and the resulting weekly rate of change.
+export function calculatePlan(
+  currentWeight: number,
+  goalWeight: number,
+  durationMonths: number,
+  maintenance: number
+): { dailyCalories: number; weeklyRateKg: number; dailyDeficit: number } {
+  const diffKg = currentWeight - goalWeight; // positive = lose
+  const totalDeficitKcal = diffKg * 7700;
+  const days = Math.max(1, durationMonths * 30);
+  const dailyDeficit = totalDeficitKcal / days;
+  const dailyCalories = Math.round(maintenance - dailyDeficit);
+  const weeklyRateKg = diffKg / (durationMonths * 4.345);
+  return { dailyCalories, weeklyRateKg, dailyDeficit };
 }
 
 export function getMacroGoals(calorieGoal: number) {
@@ -59,19 +106,26 @@ export function getMacroGoals(calorieGoal: number) {
 
 const DEFAULT_PROFILE: Profile = {
   name: '',
+  age: 30,
   gender: 'male',
   weight: 70,
   height: 170,
+  goalWeight: 65,
+  goalDurationMonths: 3,
   activityLevel: 'moderately_active',
   calorieGoal: 2000,
   useAutoGoal: true,
   weightLog: [],
+  language: 'mn',
 };
 
 interface ProfileState {
   profile: Profile;
+  hasOnboarded: boolean;
   setProfile: (profile: Partial<Profile>) => void;
   addWeightEntry: (weight: number) => void;
+  setOnboarded: (value: boolean) => void;
+  logout: () => void;
 }
 
 const secureStoreAdapter = {
@@ -84,6 +138,9 @@ export const useProfileStore = create<ProfileState>()(
   persist(
     (set) => ({
       profile: DEFAULT_PROFILE,
+      hasOnboarded: false,
+      setOnboarded: (value) => set({ hasOnboarded: value }),
+      logout: () => set({ hasOnboarded: false }),
       setProfile: (updates) =>
         set((state) => {
           const merged = { ...state.profile, ...updates };
@@ -113,6 +170,14 @@ export const useProfileStore = create<ProfileState>()(
     {
       name: 'profile-store',
       storage: createJSONStorage(() => secureStoreAdapter),
+      merge: (persisted, current) => ({
+        ...current,
+        ...(persisted as Partial<ProfileState>),
+        profile: {
+          ...DEFAULT_PROFILE,
+          ...((persisted as Partial<ProfileState>)?.profile ?? {}),
+        },
+      }),
     }
   )
 );
