@@ -14,6 +14,7 @@ interface Props {
 const PROVIDER_LABEL: Record<Provider, string> = {
   claude: 'Anthropic Claude',
   gemini: 'Google Gemini',
+  openai: 'OpenAI',
 };
 
 export function ModelPickerModal({ visible, onClose }: Props) {
@@ -21,7 +22,7 @@ export function ModelPickerModal({ visible, onClose }: Props) {
   const modelId = useModelStore((s) => s.modelId);
   const setModelId = useModelStore((s) => s.setModelId);
 
-  const grouped: Record<Provider, typeof MODELS> = { claude: [], gemini: [] };
+  const grouped: Record<Provider, typeof MODELS> = { claude: [], gemini: [], openai: [] };
   MODELS.forEach((m) => grouped[m.provider].push(m));
 
   return (
@@ -37,7 +38,7 @@ export function ModelPickerModal({ visible, onClose }: Props) {
         </View>
 
         <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: 60 }}>
-          {(['claude', 'gemini'] as Provider[]).map((provider) => (
+          {(['claude', 'gemini', 'openai'] as Provider[]).map((provider) => (
             <View key={provider} className="mb-6">
               <Text
                 style={{ fontFamily: 'DMSans_600SemiBold' }}

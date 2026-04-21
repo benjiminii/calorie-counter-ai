@@ -5,6 +5,7 @@ import { manipulateAsync, SaveFormat } from 'expo-image-manipulator';
 import i18n from './i18n';
 import { analyzeFood as analyzeClaude } from './providers/claude';
 import { analyzeFood as analyzeGemini } from './providers/gemini';
+import { analyzeFood as analyzeOpenAI } from './providers/openai';
 import { findModel } from './providers/models';
 import { useModelStore } from '@/store/model-store';
 
@@ -43,7 +44,9 @@ export async function analyzeAndUpdateMeal(
   try {
     const modelId = useModelStore.getState().modelId;
     const model = findModel(modelId);
-    const fn = model.provider === 'gemini' ? analyzeGemini : analyzeClaude;
+    const fn = model.provider === 'gemini' ? analyzeGemini
+             : model.provider === 'openai' ? analyzeOpenAI
+             : analyzeClaude;
     const language = i18n.language || 'en';
     console.log('[analyze] using', model.label, `($${model.inputPer1M}/$${model.outputPer1M} per 1M)`, 'lang:', language);
     const result = await fn(base64, context, model.id, language);
