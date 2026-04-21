@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-A React Native / Expo app for calorie tracking via food photography. A multimodal LLM (Claude or Gemini) identifies the food, estimates calories + macros, and returns structured data. Users can add natural-language context, edit the result, and re-analyze. Meals persist locally in SQLite via Drizzle.
+A React Native / Expo app for calorie tracking via food photography. A multimodal LLM (Claude, Gemini, or OpenAI) identifies the food, estimates calories + macros, and returns structured data. Users can add natural-language context, edit the result, and re-analyze. Meals persist locally in SQLite via Drizzle.
 
 **App name:** Deglem (formerly "Calorie Tracker AI" / "Ilchleg").
 
@@ -15,8 +15,9 @@ A React Native / Expo app for calorie tracking via food photography. A multimoda
 | Styling | NativeWind v4 (Tailwind classes on RN components) |
 | AI — Claude | `@anthropic-ai/sdk` with **tool_use** for structured output |
 | AI — Gemini | `@google/genai` with **responseSchema** for structured output |
+| AI — OpenAI | `openai` with **response_format: json_schema** (strict) for structured output |
 | DB | Drizzle ORM + `expo-sqlite` (`useLiveQuery` for reactivity) |
-| State | Zustand (`profile-store`, `model-store`, legacy `meal-store`) |
+| State | Zustand (`profile-store` + `model-store`, both persisted via SecureStore; legacy `meal-store`) |
 | i18n | `i18next` + `react-i18next` — English + Mongolian |
 | Fonts | DM Sans via `@expo-google-fonts/dm-sans` |
 | Camera | `expo-camera` + `expo-image-picker` + `expo-image-manipulator` |
@@ -39,17 +40,23 @@ See `DESIGN.md` for the full system. Key rules:
 
 ```
 app/
+  index.tsx            ← Root gate: reads `hasOnboarded`, redirects to /login or /(tabs)
+  login.tsx            ← Welcome screen (LoginHero + LoginContinueOptions)
+  step-section.tsx     ← Multi-step onboarding (name → profile → goal → plan preview) → sets onboarded
   (tabs)/
     _layout.tsx        ← Tabs: Home · Progress · Profile · Camera (custom raised button, last)
     index.tsx          ← Dashboard: week calendar + macro summary + meal list + model picker pill
     progress.tsx       ← Calorie + weight line charts (gifted-charts), 14-day history
-    profile.tsx        ← BMR form + language toggle (MN / EN) in top-right
+    profile.tsx        ← BMR form + language toggle (MN / EN)
     camera.tsx         ← Navigates to /log/camera (the tab is just an entry point)
   log/
     camera.tsx         ← Full-screen capture, optional context input, picker fallback
     [id].tsx           ← Meal detail: view edited values, re-analyze, delete
   _layout.tsx          ← Fonts + Drizzle migrations + i18n + global.css + splash hide
-components/            ← MealCard, CalorieRing, MacroSummary, WeekCalendar, ModelPickerModal…
+components/
+  login/               ← LoginHero, LoginContinueOptions
+  goal-setup/          ← StepIndicator, GoalStep, PlanStep, ProfileStep, SliderCard, Field
+  ...                  ← MealCard, CalorieRing, MacroSummary, WeekCalendar, ModelPickerModal, GoalEditorModal…
 lib/
   analyze.ts           ← Orchestrates: image prep → provider dispatch → DB write
   i18n.ts              ← i18next init (device-locale aware, mn fallback)
@@ -57,6 +64,7 @@ lib/
     types.ts           ← AnalyzeFoodFn, AnalysisResult, normalize(), languageInstruction()
     claude.ts          ← Claude with tool_use (structured)
     gemini.ts          ← Gemini with responseSchema + thinkingBudget: 0
+    openai.ts          ← OpenAI with response_format json_schema (strict)
     models.ts          ← MODELS registry + pricing ($/1M input/output tokens)
 db/
   schema.ts            ← `meals` table (with `model` column)
@@ -64,8 +72,8 @@ db/
   migrations/          ← Drizzle SQL migrations + `migrations.js` barrel
   index.ts             ← opens `deglem.db`
 store/
-  model-store.ts       ← selected model id (in-memory)
-  profile-store.ts     ← persisted profile via SecureStore + BMR calc
+  model-store.ts       ← selected model id, persisted via SecureStore (stale IDs dropped on merge)
+  profile-store.ts     ← persisted profile via SecureStore + BMR/maintenance calc + onboarding flag + weight log
   meal-store.ts        ← legacy, mostly unused now that meals live in SQLite
 locales/
   en.json, mn.json     ← must stay in sync (same keys)
@@ -73,6 +81,7 @@ locales/
 
 ## Core User Flow
 
+0. First launch: `app/index.tsx` checks `hasOnboarded` → routes to `/login` → `/step-section` (name · profile · goal · plan) → sets onboarded and lands on `/(tabs)`
 1. User taps the camera tab (bottom-right) on any screen
 2. `app/log/camera.tsx` — capture photo + optional quick context, or pick from library
 3. `insertMeal()` creates a row with `status: 'analyzing'`, user returns to dashboard (fire-and-forget)
@@ -82,7 +91,7 @@ locales/
 
 ## Provider Layer
 
-Both providers conform to `AnalyzeFoodFn`:
+All three providers conform to `AnalyzeFoodFn`:
 
 ```ts
 (jpegBase64: string, context: string, modelId?: string, language?: string) => Promise<AnalysisResult>
@@ -98,13 +107,20 @@ Dispatch is runtime, driven by `useModelStore.getState().modelId` + `findModel()
 
 ### Gemini (`lib/providers/gemini.ts`)
 - Uses `responseMimeType: 'application/json'` + `responseSchema` with `propertyOrdering`
-- Default model: `gemini-2.5-flash`
+- Default model: `gemini-2.5-flash` (also the app-wide `DEFAULT_MODEL_ID`)
 - `maxOutputTokens: 400`
 - `thinkingConfig: { thinkingBudget: 0 }` — disables reasoning tokens (critical for cost on 2.5 Flash)
 - Logs `response.usageMetadata` per call
 
+### OpenAI (`lib/providers/openai.ts`)
+- Uses `response_format: { type: 'json_schema', json_schema: { strict: true, ... } }` — guaranteed schema-conforming output
+- Default model: `gpt-4.1-nano`
+- `max_tokens: 400`
+- `dangerouslyAllowBrowser: true` is required because the SDK runs in the RN JS runtime
+- Logs `response.usage` per call
+
 ### Models & Pricing
-`lib/providers/models.ts` holds the full registry with USD per-1M token costs. Tap the pill next to "Recent Meals" to open `ModelPickerModal` and switch providers at runtime.
+`lib/providers/models.ts` holds the full registry with USD per-1M token costs (Gemini, OpenAI, Claude). Tap the pill next to "Recent Meals" to open `ModelPickerModal` and switch providers at runtime. The selection is persisted via `expo-secure-store`; unknown/stale ids rehydrate to the default.
 
 ## Database
 
@@ -116,7 +132,7 @@ Dispatch is runtime, driven by `useModelStore.getState().modelId` + `findModel()
 ## i18n
 
 - `lib/i18n.ts` picks device locale at startup, falls back to `mn`
-- Toggle language on Profile screen (top-right `MN / EN` pill) — not persisted across app launches (yet)
+- Toggle language on Profile screen — the choice is written to `profile.language` and persisted via SecureStore
 - Both `locales/en.json` and `locales/mn.json` must have identical keys — verify with:
   ```bash
   diff <(jq -r 'keys[]' locales/en.json | sort) <(jq -r 'keys[]' locales/mn.json | sort)
@@ -135,6 +151,7 @@ Dispatch is runtime, driven by `useModelStore.getState().modelId` + `findModel()
 ```
 EXPO_PUBLIC_ANTHROPIC_API_KEY=sk-ant-...
 EXPO_PUBLIC_GEMINI_API_KEY=...
+EXPO_PUBLIC_OPENAI_API_KEY=sk-proj-...
 ```
 
 Stored in `.env.local` (gitignored). `EXPO_PUBLIC_` prefix means **these are bundled into the JS** — anyone with the app bundle can read them. Rotate before sharing builds.

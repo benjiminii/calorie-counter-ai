@@ -2,25 +2,26 @@
 
 A React Native / Expo app for effortless calorie tracking powered by AI. Point your camera at any food — a multimodal LLM identifies it, estimates calories and macros, and lets you refine the result with natural-language context before logging.
 
-Supports both **Claude** (Anthropic) and **Gemini** (Google) models with in-app switching, so you can compare quality, speed, and per-request pricing side by side.
+Supports **Claude** (Anthropic), **Gemini** (Google), and **OpenAI** models with in-app switching, so you can compare quality, speed, and per-request pricing side by side.
 
 ## Features
 
 - **AI food recognition** — photograph any meal, get instant calorie + macro estimates
-- **Multi-provider** — switch between Claude (Haiku/Sonnet/Opus 4.x) and Gemini (2.5 Flash-Lite/Flash/Pro) at runtime
+- **Multi-provider** — switch between Claude (Haiku/Sonnet/Opus 4.x), Gemini (2.5 Flash-Lite/Flash/Pro), and OpenAI (GPT-4.1 Nano/Mini/4.1) at runtime; selection persists across launches
+- **Onboarding flow** — guided name, profile, and goal setup on first launch (Mifflin-St Jeor maintenance + weekly rate → calorie target)
 - **Context refinement** — add portion, cooking method, or extras to improve accuracy
 - **Manual override** — edit all numbers before and after logging
 - **Localized AI output** — the model responds in the UI language (English / Mongolian)
 - **Daily dashboard** — calorie ring, macro summary, week calendar, recent meals
 - **Progress view** — 7-day calorie + weight charts, 14-day history
-- **Profile** — BMR-based goal calculation (Mifflin-St Jeor), weight log, language toggle
+- **Profile** — BMR-based goal calculation, weight log, persisted language preference
 
 ## Tech Stack
 
 - **Expo SDK 54** with New Architecture (React Native 0.81)
 - **Expo Router v6** — file-based navigation
 - **NativeWind v4** — Tailwind for React Native
-- **Anthropic SDK** (`@anthropic-ai/sdk`) + **Google GenAI SDK** (`@google/genai`)
+- **Anthropic SDK** (`@anthropic-ai/sdk`) + **Google GenAI SDK** (`@google/genai`) + **OpenAI SDK** (`openai`)
 - **Drizzle ORM** + **expo-sqlite** — local persistence with reactive `useLiveQuery`
 - **Zustand** — lightweight client state
 - **i18next** + **react-i18next** — English + Mongolian
@@ -34,6 +35,7 @@ Supports both **Claude** (Anthropic) and **Gemini** (Google) models with in-app 
 - Expo Go app or iOS/Android simulator
 - Anthropic API key (https://console.anthropic.com)
 - Google AI Studio API key (https://aistudio.google.com/apikey)
+- OpenAI API key (https://platform.openai.com/api-keys)
 
 ### Install
 
@@ -43,7 +45,7 @@ npm install
 
 ### Configure
 
-Copy `.env.example` to `.env.local` and fill in both keys:
+Copy `.env.example` to `.env.local` and fill in the keys for the providers you want to use:
 
 ```bash
 cp .env.example .env.local
@@ -52,6 +54,7 @@ cp .env.example .env.local
 ```
 EXPO_PUBLIC_ANTHROPIC_API_KEY=sk-ant-...
 EXPO_PUBLIC_GEMINI_API_KEY=...
+EXPO_PUBLIC_OPENAI_API_KEY=sk-proj-...
 ```
 
 These are bundled into the JS and readable by anyone you share a build with — use dev keys during testing and rotate before shipping.
@@ -69,6 +72,9 @@ npx expo start --tunnel   # share to a remote device via ngrok
 
 ```
 app/
+  index.tsx            ← Root gate: redirects to /login or /(tabs) based on onboarding status
+  login.tsx            ← Welcome screen (hero + continue options)
+  step-section.tsx     ← Multi-step onboarding (name → profile → goal → plan preview)
   (tabs)/
     index.tsx          ← Dashboard: week calendar + macro summary + meal list
     progress.tsx       ← Calorie/weight charts + 14-day history
@@ -78,7 +84,10 @@ app/
     camera.tsx         ← Full-screen capture + photo picker
     [id].tsx           ← Meal detail: view/edit/re-analyze/delete
   _layout.tsx          ← Fonts, migrations, global.css, i18n bootstrap
-components/            ← MealCard, CalorieRing, MacroSummary, WeekCalendar, ModelPickerModal…
+components/
+  login/               ← LoginHero, LoginContinueOptions
+  goal-setup/          ← Step components for onboarding (name, profile, goal, plan)
+  ...                  ← MealCard, CalorieRing, MacroSummary, WeekCalendar, ModelPickerModal…
 lib/
   analyze.ts           ← Orchestrates image prep → provider → DB write
   i18n.ts              ← i18next init (device-locale aware)
@@ -86,6 +95,7 @@ lib/
     types.ts           ← AnalyzeFoodFn interface, shared normalize()
     claude.ts          ← Claude tool_use integration
     gemini.ts          ← Gemini responseSchema integration
+    openai.ts          ← OpenAI response_format json_schema integration
     models.ts          ← Model registry + pricing ($/1M tokens)
 db/
   schema.ts            ← Drizzle `meals` table
@@ -93,8 +103,8 @@ db/
   migrations/          ← Drizzle SQL migrations
 store/
   meal-store.ts        ← legacy meal store
-  profile-store.ts     ← Persisted profile (SecureStore) + BMR calc
-  model-store.ts       ← Selected model id
+  profile-store.ts     ← Persisted profile (SecureStore) + BMR calc + onboarding flag
+  model-store.ts       ← Selected model id (persisted via SecureStore)
 locales/               ← en.json, mn.json — must stay in sync
 DESIGN.md              ← Full design system
 CLAUDE.md              ← AI assistant guide for this codebase
@@ -102,7 +112,7 @@ CLAUDE.md              ← AI assistant guide for this codebase
 
 ## Model Switching
 
-Tap the pill next to "Recent Meals" on the dashboard to pick any Claude or Gemini model. Pricing (USD per 1M input/output tokens) is shown per model. The selection persists in memory for the session; each analyzed meal records which model was used (visible on the meal card).
+Tap the pill next to "Recent Meals" on the dashboard to pick any Claude, Gemini, or OpenAI model. Pricing (USD per 1M input/output tokens) is shown per model. The selection persists across launches via `expo-secure-store`; each analyzed meal records which model was used (visible on the meal card).
 
 ## Design System
 
@@ -110,4 +120,4 @@ Warm, analog aesthetic — cream backgrounds (`#f7f4ed`), charcoal text (`#1c1c1
 
 ## Languages
 
-UI + AI output supported in English (`en`) and Mongolian (`mn`). Toggle on the Profile screen (top-right pill). Language choice is applied to the AI prompt at request time, so food names, ingredients, and descriptions come back localized.
+UI + AI output supported in English (`en`) and Mongolian (`mn`). Toggle from the Profile screen — the choice is persisted on the profile. Language is applied to the AI prompt at request time, so food names, ingredients, and descriptions come back localized.
