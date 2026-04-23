@@ -214,6 +214,15 @@ useProfileStore.persist.onFinishHydration(() => {
   useProfileStore.setState({ _hydrated: true });
 });
 
+/**
+ * The Clerk user id the profile store is currently namespaced to, or `'guest'`.
+ * Non-React callers (e.g. sync mirrors in db/queries.ts) use this to check
+ * whether a pending write still belongs to the currently active user.
+ */
+export function getActiveProfileStoreUser(): string {
+  return activeUserId;
+}
+
 export function setProfileStoreUser(userId: string | null | undefined) {
   const next = userId ?? 'guest';
   if (next === activeUserId) return;

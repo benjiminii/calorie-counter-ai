@@ -7,7 +7,7 @@ Supports **Claude** (Anthropic), **Gemini** (Google), and **OpenAI** models with
 ## Features
 
 - **Apple + Google sign-in** via Clerk — sign-in is required; onboarding runs after authentication
-- **Convex backend scaffolded** — Clerk JWT → Convex identity; `users` table populated on sign-in (no user-authored data synced yet)
+- **Convex cloud mirror** — local-first: SQLite + Zustand stay authoritative, every write is mirrored to Convex (`users`, `profiles`, `meals` tables). Food images are **not** uploaded; they stay on-device. Signing into a fresh install hydrates profile + meals back from Convex.
 - **AI food recognition** — photograph any meal, get instant calorie + macro estimates
 - **Multi-provider** — switch between Claude (Haiku/Sonnet/Opus 4.x), Gemini (2.5 Flash-Lite/Flash/Pro), and OpenAI (GPT-4.1 Nano/Mini/4.1) at runtime; selection persists across launches
 - **Onboarding flow** — guided name, profile, and goal setup on first launch (Mifflin-St Jeor maintenance + weekly rate → calorie target)

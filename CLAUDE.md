@@ -132,7 +132,11 @@ Dispatch is runtime, driven by `useModelStore.getState().modelId` + `findModel()
 - **Onboarding flag** (`app/step-section.tsx`): writes `{ hasOnboarded: true }` to `user.unsafeMetadata`; gate reads both `unsafeMetadata` and `publicMetadata` so a future server-side write can migrate it
 - **Sign out** on profile: calls `signOut()` from `useAuth()`; gate catches the state change and redirects
 - **Per-user scoping**: `profile-store` name is namespaced `profile-store:<clerkId>` via `setProfileStoreUser` — called from `ProfileStoreUserSync`. `meals.userId` filters every read/write (`hooks/use-meals.ts`, `db/queries.ts`, `app/log/[id].tsx`)
-- **Convex sync**: `ConvexUserSync` (`lib/auth/sync-convex-user.tsx`) upserts `convex.users` row keyed by Clerk `sub` on every sign-in; no user-authored data syncs to Convex yet
+- **Convex cloud mirror** (local-first): SQLite + Zustand remain authoritative. Writes are mirrored to Convex fire-and-forget — profile via `ProfileCloudSync` (only after `hasOnboarded`), meals via the mirror helpers inside `db/queries.ts`. The guard `rowUserId === getActiveProfileStoreUser()` prevents orphan writes when analysis completes after sign-out. Guests never sync. Food images never leave the device.
+  - Tables: `users` (Clerk identity), `profiles` (BMR + onboarding + weight log), `meals` (no `photoUri`, keyed by the SQLite string id via `by_clerk_id_and_meal_id`)
+  - Mutations live in `convex/profiles.ts` and `convex/meals.ts`; all derive user identity server-side from `ctx.auth.getUserIdentity().subject`
+  - `CloudHydrationOnSignIn` (`lib/auth/sync-cloud-hydrate.tsx`) runs once per user session: if local has no meals / no onboarded profile, it pulls from Convex and populates SQLite + Zustand. Images come back as `null`.
+  - The shared client is `lib/convex-client.ts` (non-null when env is set) so non-React code (`db/queries.ts`) can call `convex.mutation(api.x.y, ...)` with auth from `ConvexProviderWithClerk`
 - **Dev build required**: native OAuth cannot run in Expo Go — use `npx eas build --profile development`
 
 ## Database

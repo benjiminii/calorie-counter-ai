@@ -6,7 +6,6 @@ import {
   useFonts,
 } from '@expo-google-fonts/dm-sans';
 import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
-import { ConvexReactClient } from 'convex/react';
 import { ConvexProviderWithClerk } from 'convex/react-clerk';
 import { useMigrations } from 'drizzle-orm/expo-sqlite/migrator';
 import Constants from 'expo-constants';
@@ -21,8 +20,11 @@ import '../global.css';
 import { db } from '@/db';
 import migrations from '@/db/migrations/migrations';
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import { CloudHydrationOnSignIn } from '@/lib/auth/sync-cloud-hydrate';
 import { ConvexUserSync } from '@/lib/auth/sync-convex-user';
+import { ProfileCloudSync } from '@/lib/auth/sync-profile-cloud';
 import { ProfileStoreUserSync } from '@/lib/auth/sync-profile-store';
+import { convex } from '@/lib/convex-client';
 import i18n from '@/lib/i18n';
 import { useProfileStore } from '@/store/profile-store';
 
@@ -55,10 +57,6 @@ const missingEnv = [
   !publishableKey && 'EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY',
   !convexUrl && 'EXPO_PUBLIC_CONVEX_URL',
 ].filter(Boolean) as string[];
-
-const convex = convexUrl
-  ? new ConvexReactClient(convexUrl, { unsavedChangesWarning: false })
-  : null;
 
 export const unstable_settings = {
   anchor: 'index',
@@ -112,6 +110,8 @@ export default function RootLayout() {
       <ConvexProviderWithClerk client={convex} useAuth={useAuth}>
         <ProfileStoreUserSync />
         <ConvexUserSync />
+        <ProfileCloudSync />
+        <CloudHydrationOnSignIn />
         <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
           <Stack>
             <Stack.Screen name="index" options={{ headerShown: false }} />
