@@ -20,6 +20,7 @@ export const meals = sqliteTable('meals', {
   description: text('description'),
   confidence:  text('confidence'),
   model:       text('model'), // model id used for analysis, e.g. "claude-haiku-4-5-20251001"
+  userId:      text('user_id'),
 });
 
 export type MealRow = typeof meals.$inferSelect;

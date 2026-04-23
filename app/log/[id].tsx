@@ -1,4 +1,4 @@
-import { eq } from 'drizzle-orm';
+import { and, eq, sql } from 'drizzle-orm';
 import { useLiveQuery } from 'drizzle-orm/expo-sqlite';
 import * as Haptics from 'expo-haptics';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -17,6 +17,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { db } from '@/db';
 import { deleteMeal, setMealStatus, updateMealBasic } from '@/db/queries';
 import { meals } from '@/db/schema';
+import { useCurrentUserId } from '@/hooks/use-current-user-id';
 import { analyzeAndUpdateMeal } from '@/lib/analyze';
 
 function ShimmerRow({ width }: { width: number }) {
@@ -41,9 +42,18 @@ export default function MealDetailScreen() {
   const { t } = useTranslation();
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
+  const userId = useCurrentUserId();
 
   const { data } = useLiveQuery(
-    db.select().from(meals).where(eq(meals.id, id ?? '')).limit(1)
+    db
+      .select()
+      .from(meals)
+      .where(
+        userId
+          ? and(eq(meals.id, id ?? ''), eq(meals.userId, userId))
+          : sql`0 = 1`
+      )
+      .limit(1)
   );
   const meal = data?.[0] ?? null;
 

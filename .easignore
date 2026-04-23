@@ -1,0 +1,48 @@
+# What NOT to upload to EAS Build.
+# If this file exists, EAS uses it instead of .gitignore.
+
+# dependencies (re-installed in the cloud)
+node_modules/
+
+# Expo caches
+.expo/
+.metro-health-check*
+
+# build outputs
+dist/
+web-build/
+
+# generated native folders (Expo prebuild regenerates them)
+/ios
+/android
+
+# local env files (values come from EAS secrets / eas.json env)
+.env*.local
+
+# OS / editor
+.DS_Store
+.vscode/
+.cursor/
+.claude
+.idea/
+
+# debug logs
+npm-debug.*
+yarn-debug.*
+yarn-error.*
+
+# credentials
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+*.pem
+
+# project-local artifacts
+graphify-out
+design/
+app-example
+dist/
+expo-env.d.ts
+*.tsbuildinfo

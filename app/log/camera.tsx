@@ -10,6 +10,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { analyzeAndUpdateMeal } from '@/lib/analyze';
 import { insertMeal, todayString } from '@/db/queries';
+import { useCurrentUserId } from '@/hooks/use-current-user-id';
 
 function goBack(router: ReturnType<typeof useRouter>) {
   if (router.canGoBack()) {
@@ -26,8 +27,21 @@ export default function CameraScreen() {
   const [context, setContext] = useState('');
   const [capturing, setCapturing] = useState(false);
   const [permission, requestPermission] = useCameraPermissions();
+  const userId = useCurrentUserId();
 
   if (!permission) return null;
+
+  // Wait for Clerk / profile-store to resolve before allowing capture;
+  // otherwise a tap can fire with userId === null and silently no-op.
+  if (!userId) {
+    return (
+      <SafeAreaView className="flex-1 bg-cream items-center justify-center">
+        <Text style={{ fontFamily: 'DMSans_400Regular' }} className="text-muted">
+          {t('loading')}
+        </Text>
+      </SafeAreaView>
+    );
+  }
 
   if (!permission.granted) {
     return (
@@ -63,8 +77,14 @@ export default function CameraScreen() {
   }
 
   async function saveMealAndAnalyze(photoUri: string) {
+    if (!userId) {
+      // Defensive: the guard above short-circuits rendering, but keep this
+      // so a stale capture callback doesn't write a row with NULL user_id.
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+      return;
+    }
     const id = Date.now().toString();
-    await insertMeal({ id, photoUri, date: todayString() });
+    await insertMeal({ id, photoUri, date: todayString(), userId });
     // Fire-and-forget — analysis runs after navigation
     analyzeAndUpdateMeal(id, photoUri, context);
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
