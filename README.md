@@ -6,6 +6,8 @@ Supports **Claude** (Anthropic), **Gemini** (Google), and **OpenAI** models with
 
 ## Features
 
+- **Apple + Google sign-in** via Clerk — sign-in is required; onboarding runs after authentication
+- **Convex backend scaffolded** — Clerk JWT → Convex identity; `users` table populated on sign-in (no user-authored data synced yet)
 - **AI food recognition** — photograph any meal, get instant calorie + macro estimates
 - **Multi-provider** — switch between Claude (Haiku/Sonnet/Opus 4.x), Gemini (2.5 Flash-Lite/Flash/Pro), and OpenAI (GPT-4.1 Nano/Mini/4.1) at runtime; selection persists across launches
 - **Onboarding flow** — guided name, profile, and goal setup on first launch (Mifflin-St Jeor maintenance + weekly rate → calorie target)
@@ -22,6 +24,8 @@ Supports **Claude** (Anthropic), **Gemini** (Google), and **OpenAI** models with
 - **Expo Router v6** — file-based navigation
 - **NativeWind v4** — Tailwind for React Native
 - **Anthropic SDK** (`@anthropic-ai/sdk`) + **Google GenAI SDK** (`@google/genai`) + **OpenAI SDK** (`openai`)
+- **Clerk** (`@clerk/expo`) — Apple + Google SSO, SecureStore-backed token cache
+- **Convex** — backend for future cloud sync; authenticated via Clerk JWT template
 - **Drizzle ORM** + **expo-sqlite** — local persistence with reactive `useLiveQuery`
 - **Zustand** — lightweight client state
 - **i18next** + **react-i18next** — English + Mongolian
@@ -55,18 +59,41 @@ cp .env.example .env.local
 EXPO_PUBLIC_ANTHROPIC_API_KEY=sk-ant-...
 EXPO_PUBLIC_GEMINI_API_KEY=...
 EXPO_PUBLIC_OPENAI_API_KEY=sk-proj-...
+EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY=pk_test_...
+EXPO_PUBLIC_CONVEX_URL=https://<deployment>.convex.cloud
 ```
 
 These are bundled into the JS and readable by anyone you share a build with — use dev keys during testing and rotate before shipping.
 
+Bootstrap Convex (one-time, opens a browser to log in):
+
+```bash
+npx convex dev --once --configure=new
+npx convex env set CLERK_JWT_ISSUER_DOMAIN https://<your-clerk-issuer>.clerk.accounts.dev
+npx convex dev --once
+```
+
+In the Clerk dashboard, create a **JWT template named `convex`** (JWT Templates → New → Convex preset). Without this, `ctx.auth.getUserIdentity()` returns null on the Convex side and the user upsert will throw `Not authenticated`.
+
+For Apple Sign-In on a real device, enable the **Sign In with Apple** capability on the `com.deglem.app` App ID in the Apple Developer portal (simulator builds work without this).
+
 ### Run
 
 ```bash
-npm start           # Metro bundler
-npm run ios         # iOS simulator
-npm run android     # Android emulator
-npx expo start --tunnel   # share to a remote device via ngrok
+npm start                  # Metro bundler (attaches to an existing dev-client build)
+npm run ios                # expo run:ios — compiles the iOS app locally then runs it
+npm run android            # expo run:android — compiles the Android app locally then runs it
+npx expo start --tunnel    # share to a remote device via ngrok
 ```
+
+> `npm run ios` / `npm run android` now perform a **full native build** (the project uses Clerk native modules, so a dev client is required). The first run takes several minutes and requires a working Xcode / Android Studio toolchain. After that, `npm start` alone is enough to attach Metro to the already-built dev client.
+
+> Native Apple/Google sign-in does **not** work in Expo Go — it needs an EAS development build. For a cloud build instead of local:
+>
+> ```bash
+> npx eas build --profile development --platform ios
+> npx eas build --profile development --platform android
+> ```
 
 ## Project Structure
 

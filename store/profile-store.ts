@@ -122,9 +122,18 @@ const DEFAULT_PROFILE: Profile = {
 interface ProfileState {
   profile: Profile;
   hasOnboarded: boolean;
+  isGuest: boolean;
+  /**
+   * True once the store has finished rehydrating from SecureStore for the
+   * *current* active user. Flips back to false while we swap users and load
+   * the new namespace, so consumers (e.g. IndexGate) can wait before reading
+   * onboarding state.
+   */
+  _hydrated: boolean;
   setProfile: (profile: Partial<Profile>) => void;
   addWeightEntry: (weight: number) => void;
   setOnboarded: (value: boolean) => void;
+  setGuest: (value: boolean) => void;
   logout: () => void;
 }
 
@@ -134,13 +143,27 @@ const secureStoreAdapter = {
   removeItem: (key: string) => SecureStore.deleteItemAsync(key),
 };
 
+let activeUserId = 'guest';
+
+// SecureStore only allows [A-Za-z0-9._-] in keys, so no ':' or other separators.
+function sanitizeUserId(id: string): string {
+  return id.replace(/[^A-Za-z0-9._-]/g, '_');
+}
+
+function profileStoreKey(userId: string): string {
+  return `profile-store_${sanitizeUserId(userId)}`;
+}
+
 export const useProfileStore = create<ProfileState>()(
   persist(
     (set) => ({
       profile: DEFAULT_PROFILE,
       hasOnboarded: false,
+      isGuest: false,
+      _hydrated: false,
       setOnboarded: (value) => set({ hasOnboarded: value }),
-      logout: () => set({ hasOnboarded: false }),
+      setGuest: (value) => set({ isGuest: value }),
+      logout: () => set({ hasOnboarded: false, isGuest: false }),
       setProfile: (updates) =>
         set((state) => {
           const merged = { ...state.profile, ...updates };
@@ -168,8 +191,13 @@ export const useProfileStore = create<ProfileState>()(
         }),
     }),
     {
-      name: 'profile-store',
+      name: profileStoreKey(activeUserId),
       storage: createJSONStorage(() => secureStoreAdapter),
+      // `_hydrated` is a runtime flag; never persist it.
+      partialize: (state) => {
+        const { _hydrated: _ignored, ...rest } = state;
+        return rest as Omit<ProfileState, '_hydrated'>;
+      },
       merge: (persisted, current) => ({
         ...current,
         ...(persisted as Partial<ProfileState>),
@@ -181,3 +209,26 @@ export const useProfileStore = create<ProfileState>()(
     }
   )
 );
+
+useProfileStore.persist.onFinishHydration(() => {
+  useProfileStore.setState({ _hydrated: true });
+});
+
+export function setProfileStoreUser(userId: string | null | undefined) {
+  const next = userId ?? 'guest';
+  if (next === activeUserId) return;
+  activeUserId = next;
+  // Reset hydrated flag, swap the SecureStore key, then re-hydrate. The
+  // onFinishHydration callback above flips `_hydrated` back to true.
+  useProfileStore.setState({ _hydrated: false });
+  useProfileStore.persist.setOptions({ name: profileStoreKey(activeUserId) });
+  useProfileStore.persist.rehydrate();
+}
+
+/**
+ * Hook: `true` once the store is hydrated for the currently active user.
+ * Use this before trusting `hasOnboarded` / profile values after sign-in.
+ */
+export function useProfileStoreHydrated(): boolean {
+  return useProfileStore((s) => s._hydrated);
+}

@@ -15,6 +15,20 @@
       "when": 1776233611528,
       "tag": "0001_chunky_fenris",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1776907911830,
+      "tag": "0002_white_forgotten_one",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1776907911831,
+      "tag": "0003_backfill_guest_user_id",
+      "breakpoints": true
     }
   ]
 }

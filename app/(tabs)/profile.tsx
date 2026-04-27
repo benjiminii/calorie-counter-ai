@@ -6,6 +6,7 @@ import { useTranslation } from 'react-i18next';
 import * as Haptics from 'expo-haptics';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 
+import { useAuth } from '@clerk/expo';
 import { useProfileStore } from '@/store/profile-store';
 import { GoalEditorModal } from '@/components/goal-editor-modal';
 
@@ -19,7 +20,8 @@ export default function ProfileScreen() {
   const router = useRouter();
   const profile = useProfileStore((s) => s.profile);
   const setProfile = useProfileStore((s) => s.setProfile);
-  const logout = useProfileStore((s) => s.logout);
+  const logoutStore = useProfileStore((s) => s.logout);
+  const { signOut, isSignedIn } = useAuth();
   const [editorOpen, setEditorOpen] = useState(false);
 
   const initials = (profile.name || 'D')
@@ -29,10 +31,13 @@ export default function ProfileScreen() {
     .slice(0, 2)
     .toUpperCase();
 
-  function handleLogout() {
+  async function handleLogout() {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-    logout();
-    router.replace('/login' as never);
+    if (isSignedIn) {
+      await signOut();
+    }
+    logoutStore();
+    router.replace('/' as never);
   }
 
   return (

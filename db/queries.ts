@@ -1,4 +1,4 @@
-import { desc, eq } from 'drizzle-orm';
+import { and, desc, eq } from 'drizzle-orm';
 import { db } from './index';
 import { meals, type MealRow } from './schema';
 
@@ -33,12 +33,23 @@ export function getTotalsByDate(
 
 // ─── Queries ─────────────────────────────────────────────────────────────────
 
-export async function getAllMeals(): Promise<MealRow[]> {
-  return db.select().from(meals).orderBy(desc(meals.loggedAt));
+export async function getAllMeals(userId: string): Promise<MealRow[]> {
+  return db
+    .select()
+    .from(meals)
+    .where(eq(meals.userId, userId))
+    .orderBy(desc(meals.loggedAt));
 }
 
-export async function getMealById(id: string): Promise<MealRow | undefined> {
-  const rows = await db.select().from(meals).where(eq(meals.id, id)).limit(1);
+export async function getMealById(
+  id: string,
+  userId: string
+): Promise<MealRow | undefined> {
+  const rows = await db
+    .select()
+    .from(meals)
+    .where(and(eq(meals.id, id), eq(meals.userId, userId)))
+    .limit(1);
   return rows[0];
 }
 
@@ -46,6 +57,7 @@ export async function insertMeal(data: {
   id: string;
   photoUri: string;
   date: string;
+  userId: string;
 }): Promise<void> {
   await db.insert(meals).values({
     id: data.id,
@@ -53,6 +65,7 @@ export async function insertMeal(data: {
     date: data.date,
     loggedAt: Date.now(),
     status: 'analyzing',
+    userId: data.userId,
   });
 }
 

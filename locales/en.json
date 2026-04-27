@@ -74,6 +74,8 @@
   "continue_apple": "Continue with Apple",
   "login_tagline": "Effortless calorie tracking, powered by AI.",
   "login_fineprint": "By continuing you agree to our terms and privacy policy.",
+  "continue_guest": "Continue without an account",
+  "loading": "Loading…",
   "achievements": "Achievements",
   "weight_journey": "Weight journey",
   "starting_weight": "Starting",
