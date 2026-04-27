@@ -1,14 +1,16 @@
-import { useEffect, useState } from 'react';
-import { View, Text, ScrollView, Pressable, TextInput } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
-import { useTranslation } from 'react-i18next';
-import * as Haptics from 'expo-haptics';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
+import * as Haptics from 'expo-haptics';
+import { useRouter } from 'expo-router';
+import { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import { Pressable, ScrollView, Text, TextInput, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { useAuth } from '@clerk/expo';
-import { useProfileStore } from '@/store/profile-store';
 import { GoalEditorModal } from '@/components/goal-editor-modal';
+import { useAccessStatus } from '@/lib/access';
+import { PLANS, type PlanId } from '@/lib/plans';
+import { useProfileStore } from '@/store/profile-store';
+import { useAuth } from '@clerk/expo';
 
 const LANGUAGES: { code: string; label: string }[] = [
   { code: 'mn', label: 'MN' },
@@ -23,6 +25,7 @@ export default function ProfileScreen() {
   const logoutStore = useProfileStore((s) => s.logout);
   const { signOut, isSignedIn } = useAuth();
   const [editorOpen, setEditorOpen] = useState(false);
+  const access = useAccessStatus();
 
   const initials = (profile.name || 'D')
     .split(' ')
@@ -31,13 +34,15 @@ export default function ProfileScreen() {
     .slice(0, 2)
     .toUpperCase();
 
-  async function handleLogout() {
+  function handleLogout() {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-    if (isSignedIn) {
-      await signOut();
-    }
+    // Navigate first so the tabs unmount before we tear down auth — otherwise
+    // mounted Convex queries fire with a stale token and surface "Not authenticated".
+    router.replace('/login' as never);
     logoutStore();
-    router.replace('/' as never);
+    if (isSignedIn) {
+      signOut().catch((err) => console.warn('[profile] signOut failed', err));
+    }
   }
 
   return (
@@ -195,6 +200,24 @@ export default function ProfileScreen() {
           />
         </View>
 
+        {/* Subscription */}
+        <SectionHeader icon="workspace-premium" label={t('sub_title')} />
+        <View className="mx-5 bg-cream border border-cream-border rounded-2xl overflow-hidden">
+          <Row
+            icon="star"
+            title={t('sub_status')}
+            valueLabel={subStatusLabel(access, t)}
+            onPress={() => router.push('/paywall' as never)}
+          />
+          <Divider />
+          <Row
+            icon="redeem"
+            title={t('sub_manage')}
+            valueLabel={t('subscribe_now')}
+            onPress={() => router.push('/paywall' as never)}
+          />
+        </View>
+
         {/* General */}
         <SectionHeader icon="settings" label={t('general_settings')} />
         <View className="mx-5 bg-cream border border-cream-border rounded-2xl overflow-hidden">
@@ -335,4 +358,27 @@ function EditableRow({
 
 function Divider() {
   return <View className="h-px bg-cream-border mx-5" />;
+}
+
+function subStatusLabel(
+  access: ReturnType<typeof useAccessStatus>,
+  t: (key: string, options?: Record<string, unknown>) => string
+): string {
+  switch (access.kind) {
+    case 'loading':
+      return '…';
+    case 'guest':
+      return t('sub_signed_out');
+    case 'trial':
+      return t('trial_days_left', { count: access.daysLeft, days: access.daysLeft });
+    case 'active': {
+      const date = new Date(access.endsAt).toLocaleDateString();
+      const label = PLANS[access.plan as PlanId]?.labelKey
+        ? t(PLANS[access.plan as PlanId].labelKey)
+        : access.plan;
+      return t('sub_active_until', { date, plan: label });
+    }
+    case 'expired':
+      return t('sub_expired');
+  }
 }

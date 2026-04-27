@@ -1,4 +1,5 @@
 import type { ExpoConfig } from 'expo/config';
+import { withEntitlementsPlist, type ConfigPlugin } from 'expo/config-plugins';
 
 const appJson = require('./app.json');
 
@@ -20,10 +21,20 @@ export default (): ExpoConfig => {
 
   const clerkPlugin: [string, Record<string, unknown>] = [
     '@clerk/expo',
-    iosUrlScheme
-      ? { googleSignIn: { iosUrlScheme } }
-      : {},
+    {
+      appleSignIn: false,
+      ...(iosUrlScheme ? { googleSignIn: { iosUrlScheme } } : {}),
+    },
   ];
+  
+  // Free Apple developer accounts cannot sign apps with the Sign In with Apple
+  // capability. `expo-apple-authentication` unconditionally adds the entitlement
+  // (no opt-out), so this plugin runs LAST and strips it back out for dev builds.
+  const stripAppleSignIn: ConfigPlugin = (config) =>
+    withEntitlementsPlist(config, (c) => {
+      delete c.modResults['com.apple.developer.applesignin'];
+      return c;
+    });
 
   const basePlugins = (base.plugins ?? []) as ExpoConfig['plugins'];
   const plugins = [
@@ -31,6 +42,7 @@ export default (): ExpoConfig => {
       (p) => !(Array.isArray(p) && p[0] === '@clerk/expo') && p !== '@clerk/expo'
     ),
     clerkPlugin,
+    stripAppleSignIn,
   ] as ExpoConfig['plugins'];
 
   return { ...base, plugins };

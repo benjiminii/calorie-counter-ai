@@ -4,13 +4,15 @@ import * as ImagePicker from 'expo-image-picker';
 import { useRouter } from 'expo-router';
 import { useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Pressable, Text, TextInput, View } from 'react-native';
+import { Alert, Pressable, Text, TextInput, View } from 'react-native';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { analyzeAndUpdateMeal } from '@/lib/analyze';
 import { insertMeal, todayString } from '@/db/queries';
 import { useCurrentUserId } from '@/hooks/use-current-user-id';
+import { useAccessStatus } from '@/lib/access';
+import { useDailyUsage } from '@/lib/usage';
 
 function goBack(router: ReturnType<typeof useRouter>) {
   if (router.canGoBack()) {
@@ -28,6 +30,8 @@ export default function CameraScreen() {
   const [capturing, setCapturing] = useState(false);
   const [permission, requestPermission] = useCameraPermissions();
   const userId = useCurrentUserId();
+  const access = useAccessStatus();
+  const usage = useDailyUsage();
 
   if (!permission) return null;
 
@@ -81,6 +85,16 @@ export default function CameraScreen() {
       // Defensive: the guard above short-circuits rendering, but keep this
       // so a stale capture callback doesn't write a row with NULL user_id.
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+      return;
+    }
+    if (access.kind === 'expired') {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+      router.replace('/paywall' as never);
+      return;
+    }
+    if (!usage.loading && !usage.allowed) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+      Alert.alert(t('daily_limit_reached'), t('daily_limit_sub'));
       return;
     }
     const id = Date.now().toString();

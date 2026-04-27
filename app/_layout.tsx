@@ -120,6 +120,8 @@ export default function RootLayout() {
             <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
             <Stack.Screen name="log/camera" options={{ headerShown: false, animation: 'fade' }} />
             <Stack.Screen name="log/[id]" options={{ headerShown: false, animation: 'slide_from_bottom' }} />
+            <Stack.Screen name="paywall" options={{ headerShown: false, animation: 'slide_from_bottom' }} />
+            <Stack.Screen name="payment/[invoiceId]" options={{ headerShown: false, animation: 'slide_from_bottom' }} />
           </Stack>
           <StatusBar style="auto" />
         </ThemeProvider>

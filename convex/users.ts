@@ -28,9 +28,17 @@ export const upsertFromClerk = mutation({
       .withIndex('by_clerk_id', (q) => q.eq('clerkId', identity.subject))
       .unique();
     if (existing) {
-      await ctx.db.patch(existing._id, args);
+      const patch: Record<string, unknown> = { ...args };
+      if (existing.trialStartedAt == null) {
+        patch.trialStartedAt = Date.now();
+      }
+      await ctx.db.patch(existing._id, patch);
       return existing._id;
     }
-    return await ctx.db.insert('users', { clerkId: identity.subject, ...args });
+    return await ctx.db.insert('users', {
+      clerkId: identity.subject,
+      trialStartedAt: Date.now(),
+      ...args,
+    });
   },
 });
