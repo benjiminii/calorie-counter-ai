@@ -1,6 +1,6 @@
 import type { ExpoConfig } from 'expo/config';
 
-import appJson from './app.json';
+const appJson = require('./app.json');
 
 // Expo picks up `app.config.ts` in preference to `app.json`. We keep most of
 // the config in `app.json` for readability and only override what needs

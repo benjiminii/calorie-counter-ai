@@ -8,6 +8,8 @@
  * @module
  */
 
+import type * as meals from "../meals.js";
+import type * as profiles from "../profiles.js";
 import type * as users from "../users.js";
 
 import type {
@@ -17,6 +19,8 @@ import type {
 } from "convex/server";
 
 declare const fullApi: ApiFromModules<{
+  meals: typeof meals;
+  profiles: typeof profiles;
   users: typeof users;
 }>;
 
