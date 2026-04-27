@@ -197,6 +197,7 @@ export default function StepSection() {
             {step === 3 ? t('get_started') : t('continue_button')}
           </Text>
         </Pressable>
+        {step !== 1 && (
         <Pressable onPress={handleBack} className="py-2 items-center active:opacity-70">
           <Text
             style={{ fontFamily: 'DMSans_600SemiBold' }}
@@ -205,6 +206,7 @@ export default function StepSection() {
             {t('back_button')}
           </Text>
         </Pressable>
+        )}
       </View>
     </SafeAreaView>
   );

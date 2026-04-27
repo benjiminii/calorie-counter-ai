@@ -210,7 +210,14 @@ export const useProfileStore = create<ProfileState>()(
   )
 );
 
+let pendingGuestReset = false;
+
 useProfileStore.persist.onFinishHydration(() => {
+  if (pendingGuestReset) {
+    pendingGuestReset = false;
+    useProfileStore.setState({ _hydrated: true, isGuest: false });
+    return;
+  }
   useProfileStore.setState({ _hydrated: true });
 });
 
@@ -226,6 +233,12 @@ export function getActiveProfileStoreUser(): string {
 export function setProfileStoreUser(userId: string | null | undefined) {
   const next = userId ?? 'guest';
   if (next === activeUserId) return;
+  // A signed-in user transitioning back to 'guest' is a sign-out — clear any
+  // stale `isGuest: true` left over from a prior "continue as guest" tap so the
+  // gate routes to /login instead of bouncing the user back into the tabs.
+  if (activeUserId !== 'guest' && next === 'guest') {
+    pendingGuestReset = true;
+  }
   activeUserId = next;
   // Reset hydrated flag, swap the SecureStore key, then re-hydrate. The
   // onFinishHydration callback above flips `_hydrated` back to true.

@@ -4,7 +4,7 @@ import * as Haptics from 'expo-haptics';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Image, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
+import { Alert, Image, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import Animated, {
   Easing,
   useAnimatedStyle,
@@ -18,7 +18,9 @@ import { db } from '@/db';
 import { deleteMeal, setMealStatus, updateMealBasic } from '@/db/queries';
 import { meals } from '@/db/schema';
 import { useCurrentUserId } from '@/hooks/use-current-user-id';
+import { useAccessStatus } from '@/lib/access';
 import { analyzeAndUpdateMeal } from '@/lib/analyze';
+import { useDailyUsage } from '@/lib/usage';
 
 function ShimmerRow({ width }: { width: number }) {
   const opacity = useSharedValue(0.4);
@@ -43,6 +45,8 @@ export default function MealDetailScreen() {
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
   const userId = useCurrentUserId();
+  const access = useAccessStatus();
+  const usage = useDailyUsage();
 
   const { data } = useLiveQuery(
     db
@@ -100,6 +104,18 @@ export default function MealDetailScreen() {
 
   async function handleReanalyze() {
     if (!meal?.photoUri) return;
+    if (access.kind === 'expired') {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+      router.replace('/paywall' as never);
+      return;
+    }
+    // Re-analysis doesn't create a new row on the server, so the 10/day cap
+    // has to be enforced here.
+    if (!usage.loading && !usage.allowed) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+      Alert.alert(t('daily_limit_reached'), t('daily_limit_sub'));
+      return;
+    }
     setReanalyzing(true);
     try {
       await setMealStatus(meal.id, 'analyzing');
